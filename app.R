@@ -4,12 +4,12 @@ library(ggplot2)
 library(dplyr)
 library(plotly)
 library(DT)
-## test
+library(stringr)
+# code 
 # Functie om de dagen sinds de startdatum te berekenen
 convert_to_days_since_start <- function(date, start_date) {
   as.numeric(date - start_date) + 1
 }
-
 ui <- fluidPage(theme = shinytheme("united"), #themeSelector(),
                 tags$head(
                   tags$style(HTML("
@@ -45,7 +45,7 @@ ui <- fluidPage(theme = shinytheme("united"), #themeSelector(),
                                         dateInput("start_date", "Startdate ('Day 1')", value = NULL)
                                       ),
                                       mainPanel(
-                                        h3("Enter the start date corresponding to 'Day 1' in your data here.")
+                                        h3("Enter the start date corresponding to 'Day 1' in your data here."),
                                       )
                                     )
                            ),
@@ -68,12 +68,25 @@ ui <- fluidPage(theme = shinytheme("united"), #themeSelector(),
                                       )
                                     )
                            ),
-                           tabPanel("Download",
-                                    titlePanel("Here can you download the plot"),
-                                    mainPanel(
-                                      downloadButton("downloadPlot", "Download Plot")
+                           tabPanel("Mean Lines",
+                                    titlePanel("Mean Lines Plot"),
+                                    sidebarLayout(
+                                      sidebarPanel(
+                                        uiOutput("genotype_ui_mean"),
+                                        uiOutput("treatment_ui_mean")
+                                      ),
+                                      mainPanel(
+                                        plotlyOutput("meanLinesPlot")  
+                                      )
                                     )
-                           )
+                           ),
+                           tabPanel("Download",
+                                    titlePanel("Here can you download the plots"),
+                                    mainPanel(
+                                      downloadButton("downloadPlot", "Download the first plot"),
+                                      downloadButton("downloadmeanplot", "Download the mean plot")
+                                    )
+                           ),
                            
                 )
 )
@@ -168,6 +181,10 @@ server <- function(input, output, session) {
     checkboxGroupInput("genotype", "Select Genotype", choices = unique(data()$genotype))
   })
   
+  output$genotype_ui2 <- renderUI({
+    checkboxGroupInput("genotype2", "Select Genotype", choices = unique(data()$genotype))
+  })
+  
   observe({
     if (!is.null(input$genotype) && length(input$genotype) > 0) {
       filtered_treatments <- unique(data()[data()$genotype %in% input$genotype, ]$treatments)
@@ -184,8 +201,16 @@ server <- function(input, output, session) {
     checkboxGroupInput("treatments", "Select treatments", choices = unique(data()$treatments))
   })
   
+  output$treatment_ui2 <- renderUI({
+    checkboxGroupInput("treatments2", "Select treatments", choices = unique(data()$treatments))
+  })
+  
   output$potnummers_ui <- renderUI({
     checkboxGroupInput("potnummers", "Selecteer Potnumbers", choices = unique(data()$pot_number))
+  })
+  
+  output$potnummers_ui2 <- renderUI({
+    checkboxGroupInput("potnummers2", "Selecteer Potnumbers", choices = unique(data()$pot_number))
   })
   
   scatter_data <- reactive({
@@ -205,7 +230,7 @@ server <- function(input, output, session) {
     
     filtered_data
   })
-  
+  # grpahs
   output$scatterPlot <- renderPlotly({
     num_colors <- length(unique(scatter_data()$Geno_Treat))
     color_palette <- scales::hue_pal()(num_colors)
@@ -226,7 +251,59 @@ server <- function(input, output, session) {
     
     ggplotly(p)  # Converteer ggplot naar plotly
   })
+  # Mean Lines plot
+  output$genotype_ui_mean <- renderUI({
+    checkboxGroupInput("genotype_mean", "Select Genotype", choices = unique(data()$genotype))
+  })
   
+  observe({
+    if (!is.null(input$genotype_mean) && length(input$genotype_mean) > 0) {
+      filtered_treatments <- unique(data()[data()$genotype %in% input$genotype_mean, ]$treatments)
+      updateCheckboxGroupInput(session, "treatments_mean", choices = filtered_treatments)
+    } else {
+      updateCheckboxGroupInput(session, "treatments_mean", choices = unique(data()$treatments))
+    }
+  })
+  
+  output$treatment_ui_mean <- renderUI({
+    checkboxGroupInput("treatments_mean", "Select treatments", choices = unique(data()$treatments))
+  })
+  
+  scatter_data_mean <- reactive({
+    filtered_data <- data()
+    
+    if (!is.null(input$treatments_mean) && length(input$treatments_mean) > 0) {
+      filtered_data <- filtered_data %>% filter(treatments %in% input$treatments_mean)
+    }
+    
+    if (!is.null(input$genotype_mean) && length(input$genotype_mean) > 0) {
+      filtered_data <- filtered_data %>% filter(genotype %in% input$genotype_mean)
+    }
+    
+    filtered_data
+  })
+  
+  output$meanLinesPlot <- renderPlotly({
+    num_colors <- length(unique(scatter_data_mean()$Geno_Treat))
+    color_palette <- scales::hue_pal()(num_colors)
+    
+    # Bereken het gemiddelde per genotype
+    mean_data <- scatter_data_mean() %>%
+      group_by(Geno_Treat, Day) %>%
+      summarise(mean_shootArea2 = mean(shootArea2, na.rm = TRUE),
+                sd_shootArea2 = sd(shootArea2, na.rm = TRUE))  # Bereken standaarddeviatie
+    
+    p <- ggplot() +
+      geom_line(data = mean_data, aes(x = Day, y = mean_shootArea2, color = factor(Geno_Treat), group = Geno_Treat)) +
+      geom_point(data = mean_data, aes(x = Day, y = mean_shootArea2, color = factor(Geno_Treat), group = Geno_Treat)) +
+      geom_errorbar(data = mean_data, aes(x = Day, ymin = mean_shootArea2 - sd_shootArea2, ymax = mean_shootArea2 + sd_shootArea2), width = 0.25) + # Toevoegen van foutbalken
+      labs(x = "Days since Start", y = "Mean Shoot Area 2", color = "Genotype-Treatment") +
+      theme_minimal() +
+      scale_color_manual(values = color_palette) +
+      scale_x_continuous(breaks = seq(1, max(scatter_data_mean()$Day), by = 5))
+    
+    (p)  # Converteer ggplot naar plotly
+  })
   # Download plot
   output$downloadPlot <- downloadHandler(
     filename = function() {
@@ -250,12 +327,38 @@ server <- function(input, output, session) {
           theme_minimal() +
           scale_color_manual(values = color_palette) + # Geef kleuren op basis van genotype
           scale_x_continuous(breaks = seq(1, max(scatter_data()$Day), by = 5))  # X-as per 5 dagen
-        
-        p
+        (p) 
       })
     })
+  # download mean plot
+  output$downloadmeanplot <- downloadHandler(
+    filename = function() {
+      paste("meanplot-", Sys.Date(), ".png", sep = "")
+    },
+    content = function(file) {
+      ggsave(file, plot = {
+        num_colors <- length(unique(scatter_data()$Geno_Treat))
+        color_palette <- scales::hue_pal()(num_colors)
+        # Bereken het gemiddelde per genotype
+        mean_data <- scatter_data_mean() %>%
+          group_by(Geno_Treat, Day) %>%
+          summarise(mean_shootArea2 = mean(shootArea2, na.rm = TRUE),
+                    sd_shootArea2 = sd(shootArea2, na.rm = TRUE))  # Bereken standaarddeviatie
+        
+        p <- ggplot() +
+          geom_line(data = mean_data, aes(x = Day, y = mean_shootArea2, color = factor(Geno_Treat), group = Geno_Treat)) +
+          geom_point(data = mean_data, aes(x = Day, y = mean_shootArea2, color = factor(Geno_Treat), group = Geno_Treat)) +
+          geom_errorbar(data = mean_data, aes(x = Day, ymin = mean_shootArea2 - sd_shootArea2, ymax = mean_shootArea2 + sd_shootArea2), width = 0.25) + # Toevoegen van foutbalken
+          labs(x = "Days since Start", y = "Mean Shoot Area 2", color = "Genotype-Treatment") +
+          theme_minimal() +
+          scale_color_manual(values = color_palette) +
+          scale_x_continuous(breaks = seq(1, max(scatter_data_mean()$Day), by = 5))
+      })
+    })
+  
+  # outliers + berekeningen
   outliers <- reactiveVal(NULL)
-    # Bereken gemiddelde, standaardfout en outliers
+  # Bereken gemiddelde, standaardfout en outliers
   output$geno_treat_stats <- renderPrint({
     df <- scatter_data()
     # pijplijnoperator (%>%), die wordt gebruikt om de dataset df te bewerken. 
@@ -275,14 +378,14 @@ server <- function(input, output, session) {
     stats$outlier_upper_bound <- stats$mean_shootArea2 + 2 * stats$sd_shootArea2
     
     outliers(df %>%
-          # indien de dag anders is verander hier de dag.
-          filter(Day == 24) %>% # dag 24 tonen
-          inner_join(stats, by = "Geno_Treat") %>% # samenvoegen van de stats en geno_treat data
-          # Hier worden de rijen gefilterd waar de waarde van shootArea2 kleiner is dan de ondergrens van de outliers (gemiddelde - 2 * standaardfout)
-          # of groter is dan de bovengrens van de outliers (gemiddelde + 2 * standaardfout).
-          filter(shootArea2 < outlier_lower_bound | shootArea2 > outlier_upper_bound) %>%
-          # zorgt ervoor dat alleen unieke potnummers worden behouden, zodat elk potnummer slechts één keer wordt vermeld
-          distinct(pot_number))
+               # indien de dag anders is verander hier de dag.
+               filter(Day == 24) %>% # dag 24 tonen
+               inner_join(stats, by = "Geno_Treat") %>% # samenvoegen van de stats en geno_treat data
+               # Hier worden de rijen gefilterd waar de waarde van shootArea2 kleiner is dan de ondergrens van de outliers (gemiddelde - 2 * standaardfout)
+               # of groter is dan de bovengrens van de outliers (gemiddelde + 2 * standaardfout).
+               filter(shootArea2 < outlier_lower_bound | shootArea2 > outlier_upper_bound) %>%
+               # zorgt ervoor dat alleen unieke potnummers worden behouden, zodat elk potnummer slechts één keer wordt vermeld
+               distinct(pot_number))
     
     cat("The following pots should be considered as outliers:", paste(outliers(), collapse = ", "))
   })
@@ -298,6 +401,6 @@ server <- function(input, output, session) {
     output$action_message <- renderText("Data kept successfully.")
   })
 }
-
+# wrm wel hij nu niet commiten 
 # Start de Shiny app
 shinyApp(ui, server)

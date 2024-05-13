@@ -4,7 +4,7 @@ library(ggplot2)
 library(dplyr)
 library(plotly)
 library(DT)
-
+## test
 # Functie om de dagen sinds de startdatum te berekenen
 convert_to_days_since_start <- function(date, start_date) {
   as.numeric(date - start_date) + 1

@@ -417,9 +417,11 @@ server <- function(input, output, session) {
     output$action_message <- renderText("Data kept successfully.")
   })
   
+  
   ##################################################################
   ## statistical tests ##
   ##################################################################
+  # Inlezen van de dataset voor statistische tests en aanpassen van de datum
   output$genotype_ui_test <- renderUI({
     checkboxGroupInput("selected_genotypes", "Select genotypes for analysis", choices = unique(data()$genotype))
   })
@@ -428,7 +430,7 @@ server <- function(input, output, session) {
     req(input$selected_day, input$selected_genotypes)
     
     # Subset van de data voor de geselecteerde dag en genotypes
-    subset_data <- data() %>% filter(Day == input$selected_day, genotype %in% input$selected_genotypes)
+    subset_data <- data() %>% filter(Day == input$selected_day + 1, genotype %in% input$selected_genotypes)
     
     # Voorbereiden ANOVA test
     Genotype <- as.factor(subset_data$genotype)

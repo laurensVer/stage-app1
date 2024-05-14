@@ -429,6 +429,16 @@ server <- function(input, output, session) {
   observeEvent(input$run_statistical_tests_btn, {
     req(input$selected_day, input$selected_genotypes)
     
+    # Controleer of minimaal twee genotypes zijn geselecteerd
+    if (length(input$selected_genotypes) < 2) {
+      showModal(modalDialog(
+        title = "Error",
+        "Please select at least two genotypes for analysis.",
+        easyClose = TRUE
+      ))
+      return()
+    }
+    
     # Subset van de data voor de geselecteerde dag en genotypes
     subset_data <- data() %>% filter(Day == input$selected_day + 1, genotype %in% input$selected_genotypes)
     

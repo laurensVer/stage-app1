@@ -80,15 +80,31 @@ ui <- fluidPage(theme = shinytheme("united"), #themeSelector(),
                                       )
                                     )
                            ),
+                           tabPanel("Statistical tests",
+                                    titlePanel("Statistical tests"),
+                                    sidebarLayout(
+                                      sidebarPanel(
+                                        numericInput("selected_day", "Select day for analysis", min = 1, max = max(data()$Day), value = 1),
+                                        uiOutput("genotype_ui_test"),
+                                        actionButton("run_statistical_tests_btn", "Run Statistical Tests")
+                                      ),
+                                      mainPanel(
+                                        h3(textOutput("anova_title")),
+                                        verbatimTextOutput("anova_summary"),
+                                        h3("Pairwise comparisons - TukeyHSD test."),
+                                        verbatimTextOutput("tukey_summary")
+                                      )
+                                    )
+                           ),
                            tabPanel("Download",
                                     titlePanel("Here can you download the plots"),
                                     mainPanel(
                                       downloadButton("downloadPlot", "Download the first plot"),
                                       downloadButton("downloadmeanplot", "Download the mean plot")
                                     )
-                           ),
+                           )
                            
-                )
+    )
 )
 
 server <- function(input, output, session) {
@@ -400,7 +416,43 @@ server <- function(input, output, session) {
   observeEvent(input$keep_data_btn, {
     output$action_message <- renderText("Data kept successfully.")
   })
+  
+  ##################################################################
+  ## statistical tests ##
+  ##################################################################
+  output$genotype_ui_test <- renderUI({
+    checkboxGroupInput("selected_genotypes", "Select genotypes for analysis", choices = unique(data()$genotype))
+  })
+  
+  observeEvent(input$run_statistical_tests_btn, {
+    req(input$selected_day, input$selected_genotypes)
+    
+    # Subset van de data voor de geselecteerde dag en genotypes
+    subset_data <- data() %>% filter(Day == input$selected_day, genotype %in% input$selected_genotypes)
+    
+    # Voorbereiden ANOVA test
+    Genotype <- as.factor(subset_data$genotype)
+    Treatment <- as.factor(subset_data$treatments)
+    anovatest <- aov(shootArea2 ~ Genotype + Treatment + Genotype*Treatment, data = subset_data)
+    
+    # Uitvoeren ANOVA test
+    output$anova_title <- renderText({
+      "\n\nANOVA tests for interaction\n"
+    })
+    output$anova_summary <- renderPrint({
+      print(summary(anovatest))
+    })
+    
+    # Uitvoeren TukeyHSD test
+    output$tukey_summary <- renderPrint({
+      cat("\nPairwise comparisons - TukeyHSD test.\n")
+      cat("Genotype 1 vs. genotype 2, in control conditions. Adj. p-value =", TukeyHSD(anovatest)$'Genotype:Treatment'[6,4], "\n")
+      cat("Genotype 1 vs. genotype 2, in treatment conditions. Adj. p-value =", TukeyHSD(anovatest)$'Genotype:Treatment'[1,4], "\n")
+      cat("Genotype 1, control vs. treatment conditions. Adj. p-value =", TukeyHSD(anovatest)$'Genotype:Treatment'[2,4], "\n")
+      cat("Genotype 2, control vs. treatment conditions. Adj. p-value =", TukeyHSD(anovatest)$'Genotype:Treatment'[3,4], "\n")
+    })
+  })
 }
-# wrm wel hij nu niet commiten 
+
 # Start de Shiny app
 shinyApp(ui, server)

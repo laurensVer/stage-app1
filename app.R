@@ -222,11 +222,11 @@ server <- function(input, output, session) {
   })
   
   output$potnummers_ui <- renderUI({
-    checkboxGroupInput("potnummers", "Selecteer Potnumbers", choices = unique(data()$pot_number))
+    checkboxGroupInput("potnummers", "Select Potnumbers", choices = unique(data()$pot_number))
   })
   
   output$potnummers_ui2 <- renderUI({
-    checkboxGroupInput("potnummers2", "Selecteer Potnumbers", choices = unique(data()$pot_number))
+    checkboxGroupInput("potnummers2", "Select Potnumbers", choices = unique(data()$pot_number))
   })
   
   scatter_data <- reactive({
